@@ -41,11 +41,24 @@ Object.entries(LAYER_CONFIGS).forEach(([id, config]) => {
     style: () => ({
       color: config.color,
       weight: 1.5,
-      fillOpacity: 0.12,
-      dashArray: id === '3' ? '5, 5' : '' // Dash Urbano to differentiate
+      fillOpacity: 0.05, // Much lower opacity to see overlaps clearly
+      dashArray: id === '3' ? '5, 5' : '' 
     })
   }).addTo(map);
 });
+
+function getFeatureProperty(props: any, keys: string[]): string | undefined {
+  const lowercaseProps = Object.keys(props).reduce((acc, key) => {
+    acc[key.toLowerCase()] = props[key];
+    return acc;
+  }, {} as any);
+  
+  for (const key of keys) {
+    const val = lowercaseProps[key.toLowerCase()];
+    if (val && val !== 'Null' && val !== 'None') return val;
+  }
+  return undefined;
+}
 
 // --- Core Interaction: Cumulative Restrictions ---
 map.on('click', async (e: L.LeafletMouseEvent) => {
@@ -100,15 +113,23 @@ function renderRestrictions(features: any[], lat: number, lng: number) {
     
     container.innerHTML = sorted.map(f => {
       const config = LAYER_CONFIGS[f._layerId];
-      const name = f.properties.NOMBRE || f.properties.LABEL || config.name;
+      const props = f.properties;
+      
+      const realName = getFeatureProperty(props, ['name', 'nombre', 'label', 'identifier', 'desc_zg']);
+      const name = realName || config.name;
+      const desc = getFeatureProperty(props, ['description', 'desc', 'reasons', 'message']) || config.description;
+      
+      // If the area is huge and name contains "FIR", it's an informational zone
+      const isInformational = name.toLowerCase().includes('fir') || name.toLowerCase().includes('canarias');
+
       return `
-        <div class="restriction-item" style="border-left: 4px solid ${config.color}">
-          <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${config.color}" stroke-width="2">
+        <div class="restriction-item" style="border-left: 4px solid ${isInformational ? '#94a3b8' : config.color}">
+          <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${isInformational ? '#94a3b8' : config.color}" stroke-width="2">
             <path d="${config.icon}"></path>
           </svg>
           <div class="res-info">
             <h3>${name}</h3>
-            <p>${config.description}</p>
+            <p>${desc}</p>
           </div>
         </div>
       `;
