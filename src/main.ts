@@ -47,23 +47,29 @@ Object.values(LAYER_CONFIGS).forEach((config) => {
     url: `${config.service}/${config.id}`,
     where: "Lower < 120 OR Lower IS NULL", 
     style: (f) => {
-      const name = (getFeatureProperty(f.properties, ['name', 'nombre']) || '').toUpperCase();
-      const type = (f?.properties?.Type || '').toUpperCase();
+      const props = f?.properties || {};
+      const name = (getFeatureProperty(props, ['name', 'nombre']) || '').toUpperCase();
+      const type = (getFeatureProperty(props, ['type']) || '').toUpperCase();
       const isHidden = type.includes('TMA') || type.includes('UIR') || type.includes('FIR');
       
       let color = config.color;
       let weight = 2;
       let dashArray = '';
 
-      if (name.includes('HOSPITAL') || type.includes('HOSPITAL')) color = '#3b82f6';
-      if (type.includes('HELI')) color = '#8b5cf6';
+      // Professional Sub-coloring (Map Level)
+      if (name.includes('HOSPITAL') || type.includes('HOSPITAL')) color = '#3b82f6'; // Blue
+      else if (type.includes('HELI')) color = '#8b5cf6'; // Violet
+      else if (type === 'CTR') { color = '#dc2626'; weight = 3; } // Thick Red
+      else if (type === 'ATZ') { color = '#ef4444'; dashArray = '2, 4'; } // Dotted Red
+      else if (type.includes('SECTOR') || type.includes('TIZ')) { color = '#f97316'; weight = 1; } // Orange Sectors
+      
       if (config.category === 'urbano') dashArray = '5, 5';
       if (config.category === 'foto') { dashArray = '10, 10'; color = '#ea580c'; }
 
       return {
         color: color,
         weight: isHidden ? 0 : weight,
-        fillOpacity: isHidden ? 0 : (config.category === 'natural' ? 0.05 : 0.02),
+        fillOpacity: isHidden ? 0 : (config.category === 'natural' ? 0.05 : 0.015),
         dashArray: dashArray
       };
     }
@@ -116,13 +122,18 @@ function renderApp(features: any[], latlng: L.LatLng) {
     container.innerHTML = features.map((f, index) => {
       const config = f._config;
       const props = f.properties;
-      const type = (props.Type || '').toUpperCase();
+      const type = (getFeatureProperty(props, ['type']) || '').toUpperCase();
       const name = getFeatureProperty(props, ['name', 'nombre', 'label', 'identifier']) || config.name;
+      const upperName = name.toUpperCase();
       
-      // Dynamic sub-branding based on physical types
+      // Dynamic sub-branding
       let subColor = config.color;
       let icon = config.icon;
-      if (name.includes('HOSPITAL') || type.includes('HOSPITAL')) { subColor = '#3b82f6'; icon = 'M19 14l-7 7-7-7m14-4l-7 7-7-7'; }
+      
+      if (upperName.includes('HOSPITAL') || type.includes('HOSPITAL')) { subColor = '#3b82f6'; icon = 'M19 14l-7 7-7-7m14-4l-7 7-7-7'; }
+      else if (type === 'CTR') subColor = '#dc2626';
+      else if (type === 'ATZ') subColor = '#ef4444';
+      else if (type.includes('SECTOR')) subColor = '#f97316';
 
       return `
         <div class="restriction-item" data-index="${index}" style="border-left: 4px solid ${subColor}">
@@ -140,8 +151,8 @@ function renderApp(features: any[], latlng: L.LatLng) {
             <div class="detail-body">
               <p>${getFeatureProperty(props, ['description', 'desc_zg', 'reasons', 'message']) || 'Zona restringida por seguridad aérea u operativa.'}</p>
               <div class="meta-grid">
-                <div><span>Base:</span> ${props.Lower || 0}m</div>
-                <div><span>Techo:</span> ${props.Upper || 'UNL'}</div>
+                <div><span>Base:</span> ${getFeatureProperty(props, ['lower']) || 0}m</div>
+                <div><span>Techo:</span> ${getFeatureProperty(props, ['upper']) || 'UNL'}</div>
               </div>
               <a href="${config.action.url}" target="_blank" class="action-btn-link" style="background: ${subColor}">
                 ${config.action.label}
