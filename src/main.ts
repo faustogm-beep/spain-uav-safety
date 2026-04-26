@@ -2,163 +2,139 @@ import './style.css';
 import L from 'leaflet';
 import * as Esri from 'esri-leaflet';
 
-// --- Configuration ---
-const ENAIRE_URL = 'https://servais.enaire.es/insignia/rest/services/NSF_SRV/SRV_UAS_ZG_V1/FeatureServer';
+// --- Configuration & Services ---
+const SERVICES = {
+  UAS: 'https://servais.enaire.es/insignia/rest/services/NSF_SRV/SRV_UAS_ZG_V1/FeatureServer',
+  NATURAL: 'https://servais.enaire.es/insignia/rest/services/ENP/ENP_APP_Local_V4/MapServer',
+  AERO_EXTRA: 'https://servais.enaire.es/insignia/rest/services/NSF/Drones_ZG_Aero_V3/MapServer'
+};
 
 interface RestrictionConfig {
+  service: string;
   id: string;
+  category: 'aero' | 'urbano' | 'infra' | 'natural' | 'seguridad' | 'foto';
   name: string;
   color: string;
   icon: string;
-  description: string;
+  action: { label: string; url: string; };
 }
 
 const LAYER_CONFIGS: Record<string, RestrictionConfig> = {
-  '0': { id: 'infra', name: 'Infraestructura', color: '#8b5cf6', icon: 'M19 16v3M13 16v3M7 16v3M5 8h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2zM9 2v6M15 2v6', description: 'Protección de infraestructuras críticas o zonas sensibles.' },
-  '2': { id: 'aero', name: 'Zonas Aeronáuticas', color: '#ef4444', icon: 'M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-1.1.1-1.5.5l-.3.3c-.4.4-.5 1-.1 1.4L10 12l-4 4H4l-2 2v2l2-2h2l4-4 3.6 7.1c.4.4 1 .3 1.4-.1l.3-.3c.4-.4.6-1 .5-1.5z', description: 'CTR, Helipuertos o zonas de control de tráfico aéreo.' },
-  '3': { id: 'urbano', name: 'Zona Urbana', color: '#facc15', icon: 'M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7', description: 'Zonas pobladas o núcleos urbanos (Uso de UAS restringido).' }
+  // UAS Service
+  'uas_0': { service: SERVICES.UAS, id: '0', category: 'infra', name: 'Infraestructura Crítica', color: '#a855f7', icon: 'M19 16v3M13 16v3M7 16v3M5 8h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z', action: { label: 'Más info Sede Electrónica', url: 'https://sede.interior.gob.es/' } },
+  'uas_2': { service: SERVICES.UAS, id: '2', category: 'aero', name: 'Control Aeronáutico', color: '#ef4444', icon: 'M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-1.1.1-1.5.5l-.3.3c-.4.4-.5 1-.1 1.4L10 12l-4 4H4l-2 2v2l2-2h2l4-4 3.6 7.1c.4.4 1 .3 1.4-.1l.3-.3c.4-.4.6-1 .5-1.5z', action: { label: 'Coordinar con ENAIRE', url: 'https://planea.enaire.es/' } },
+  'uas_3': { service: SERVICES.UAS, id: '3', category: 'urbano', name: 'Zona Urbana', color: '#facc15', icon: 'M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7', action: { label: 'Comunicación Ministerio', url: 'https://sede.interior.gob.es/portal/sede/tramites?codAgrupacion=Drones' } },
+  
+  // Natural Service
+  'nat_1': { service: SERVICES.NATURAL, id: '1', category: 'natural', name: 'Zona ZEPA / Protegida', color: '#10b981', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Ver normativa ambiental', url: 'https://www.miteco.gob.es/' } },
+  
+  // Extra Aero Service
+  'extra_3': { service: SERVICES.AERO_EXTRA, id: '3', category: 'foto', name: 'Restricción Fotográfica', color: '#f97316', icon: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', action: { label: 'Permiso RVF', url: 'https://www.defensa.gob.es/' } },
+  'extra_6': { service: SERVICES.AERO_EXTRA, id: '6', category: 'seguridad', name: 'Zona de Seguridad', color: '#3b82f6', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Consultar helipuerto/AD', url: 'https://planea.enaire.es/' } }
 };
 
 // --- Initialization ---
-const map = L.map('map', {
-  zoomControl: false,
-  attributionControl: false
-}).setView([40.4168, -3.7038], 10);
+const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([28.4636, -16.2518], 11); // Start in Tenerife (Complex area)
 
 const baseMaps = {
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }),
-  ortho: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }),
-  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 })
+  ortho: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 })
 };
-
 baseMaps.dark.addTo(map);
 
-// Feature Layers (Visual only)
-const layers: Record<string, any> = {};
-Object.entries(LAYER_CONFIGS).forEach(([id, config]) => {
-  layers[id] = Esri.featureLayer({
-    url: `${ENAIRE_URL}/${id}`,
+// Add visual layers with smart styling
+Object.values(LAYER_CONFIGS).forEach((config) => {
+  Esri.featureLayer({
+    url: `${config.service}/${config.id}`,
     style: () => ({
       color: config.color,
-      weight: 1.5,
-      fillOpacity: 0.05, // Much lower opacity to see overlaps clearly
-      dashArray: id === '3' ? '5, 5' : '' 
+      weight: 2,
+      fillOpacity: config.category === 'natural' ? 0.05 : 0.03, // Very low to prevent blobs
+      dashArray: config.category === 'foto' ? '10, 10' : (config.category === 'urbano' ? '5, 5' : '')
     })
   }).addTo(map);
 });
 
-function getFeatureProperty(props: any, keys: string[]): string | undefined {
-  const lowercaseProps = Object.keys(props).reduce((acc, key) => {
-    acc[key.toLowerCase()] = props[key];
-    return acc;
-  }, {} as any);
-  
-  for (const key of keys) {
-    const val = lowercaseProps[key.toLowerCase()];
-    if (val && val !== 'Null' && val !== 'None') return val;
-  }
-  return undefined;
-}
-
-// --- Core Interaction: Cumulative Restrictions ---
+// --- Core Interaction ---
 map.on('click', async (e: L.LeafletMouseEvent) => {
-  const { lat, lng } = e.latlng;
-  
-  // Show loading state
   const listContainer = document.getElementById('restriction-list')!;
-  listContainer.innerHTML = '<div class="empty-state">Consultando restricciones acumuladas...</div>';
+  listContainer.innerHTML = '<div class="empty-state">Consultando base de datos ENAIRE/AEMET...</div>';
   
   const results: any[] = [];
-  
-  try {
-    // Spatial queries (Parallel for speed)
-    const queries = Object.keys(LAYER_CONFIGS).map(layerId => {
-      return new Promise((resolve) => {
-        Esri.query({ url: `${ENAIRE_URL}/${layerId}` })
-          .contains(e.latlng)
-          .run((error, featureCollection) => {
-            if (!error && featureCollection.features.length > 0) {
-              featureCollection.features.forEach((f: any) => {
-                results.push({ ...f, _layerId: layerId });
-              });
-            }
-            resolve(true);
-          });
-      });
+  const queries = Object.values(LAYER_CONFIGS).map((config) => {
+    return new Promise((resolve) => {
+      Esri.query({ url: `${config.service}/${config.id}` })
+        .contains(e.latlng)
+        .run((error, featureCollection) => {
+          if (!error && featureCollection?.features.length > 0) {
+            featureCollection.features.forEach((f: any) => results.push({ ...f, _config: config }));
+          }
+          resolve(true);
+        });
     });
+  });
 
-    await Promise.all(queries);
-    renderRestrictions(results, lat, lng);
-    
-  } catch (err) {
-    console.error("Error querying layers:", err);
-    listContainer.innerHTML = '<div class="empty-state">Error al consultar los datos.</div>';
-  }
+  await Promise.all(queries);
+  renderApp(results, e.latlng);
 });
 
-function renderRestrictions(features: any[], lat: number, lng: number) {
+function renderApp(features: any[], latlng: L.LatLng) {
   const container = document.getElementById('restriction-list')!;
-  const statusDot = document.getElementById('status-dot')!;
-  const statusTitle = document.getElementById('status-title')!;
-  const statusSub = document.getElementById('status-sub')!;
 
   if (features.length === 0) {
-    container.innerHTML = '<div class="empty-state">No se han detectado restricciones directas en este punto. Procede con precaución (VLOS).</div>';
-    statusDot.className = 'dot green';
-    statusTitle.innerText = 'APTO PARA VUELO';
-    statusSub.innerText = 'Sin restricciones detectadas.';
+    container.innerHTML = '<div class="empty-state">Sin restricciones directas. Mantén VLOS y precaución.</div>';
+    updateStatus('ok', 'Cielo Despejado', 'Sin restricciones detectadas.');
   } else {
-    // Sort features: Aero first, then Urbano, then Infra
-    const sorted = features.sort((a, b) => parseInt(b._layerId) - parseInt(a._layerId));
-    
-    container.innerHTML = sorted.map(f => {
-      const config = LAYER_CONFIGS[f._layerId];
-      const props = f.properties;
+    container.innerHTML = features.map(f => {
+      const config = f._config;
+      const name = getFeatureProperty(f.properties, ['name', 'nombre', 'label', 'identifier']) || config.name;
       
-      const realName = getFeatureProperty(props, ['name', 'nombre', 'label', 'identifier', 'desc_zg']);
-      const name = realName || config.name;
-      const desc = getFeatureProperty(props, ['description', 'desc', 'reasons', 'message']) || config.description;
-      
-      // If the area is huge and name contains "FIR", it's an informational zone
-      const isInformational = name.toLowerCase().includes('fir') || name.toLowerCase().includes('canarias');
-
       return `
-        <div class="restriction-item" style="border-left: 4px solid ${isInformational ? '#94a3b8' : config.color}">
-          <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${isInformational ? '#94a3b8' : config.color}" stroke-width="2">
-            <path d="${config.icon}"></path>
-          </svg>
-          <div class="res-info">
-            <h3>${name}</h3>
-            <p>${desc}</p>
+        <div class="restriction-item" style="border-left: 4px solid ${config.color}" onclick="this.classList.toggle('expanded')">
+          <div class="item-header">
+            <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${config.color}" stroke-width="2">
+              <path d="${config.icon}"></path>
+            </svg>
+            <div class="res-info">
+              <h3>${name}</h3>
+              <span class="cat-tag" style="background: ${config.color}22; color: ${config.color}">${config.category.toUpperCase()}</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"></path></svg>
+          </div>
+          <div class="item-details">
+            <p>${getFeatureProperty(f.properties, ['description', 'desc_zg', 'reasons', 'message']) || 'Sin descripción adicional disponible.'}</p>
+            <a href="${config.action.url}" target="_blank" class="action-btn-link" style="background: ${config.color}">
+              ${config.action.label}
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path></svg>
+            </a>
           </div>
         </div>
       `;
     }).join('');
 
-    // Update main status based on highest severity
-    const hasAero = features.some(f => f._layerId === '2');
-    const hasUrbano = features.some(f => f._layerId === '3');
-
-    if (hasAero) {
-      statusDot.className = 'dot red';
-      statusTitle.innerText = 'VUELO RESTRINGIDO';
-      statusSub.innerText = 'Coordinación obligatoria requerida.';
-    } else if (hasUrbano) {
-      statusDot.className = 'dot yellow';
-      statusTitle.innerText = 'ZONA URBANA';
-      statusSub.innerText = 'Cumplir con normativa de entornos urbanos.';
-    } else {
-      statusDot.className = 'dot yellow';
-      statusTitle.innerText = 'PRECAUCIÓN';
-      statusSub.innerText = 'Restricciones locales detectadas.';
-    }
+    const topSev = features.find(f => f._config.category === 'aero') || features[0];
+    updateStatus(topSev._config.category === 'aero' ? 'rest' : 'warn', 'Atención Requerida', `${features.length} zonas detectadas.`);
   }
 
-  // Update weather for new location
-  fetchWeather(lat, lng);
+  fetchWeather(latlng.lat, latlng.lng);
 }
 
-// --- Weather & UI Utils ---
+function updateStatus(type: 'ok' | 'warn' | 'rest', title: string, sub: string) {
+  const dot = document.getElementById('status-dot')!;
+  const t = document.getElementById('status-title')!;
+  const s = document.getElementById('status-sub')!;
+  dot.className = `dot ${type === 'ok' ? 'green' : (type === 'warn' ? 'yellow' : 'red')}`;
+  t.innerText = title;
+  s.innerText = sub;
+}
+
+function getFeatureProperty(props: any, keys: string[]): string | undefined {
+  const lowerProps = Object.keys(props).reduce((a, k) => { a[k.toLowerCase()] = props[k]; return a; }, {} as any);
+  for (const k of keys) { const v = lowerProps[k.toLowerCase()]; if (v && v !== 'Null') return v; }
+  return undefined;
+}
+
+// --- Weather & UI Sync ---
 async function fetchWeather(lat: number, lon: number) {
   const weatherInfo = document.getElementById('weather-info')!;
   try {
@@ -166,13 +142,9 @@ async function fetchWeather(lat: number, lon: number) {
     const data = await res.json();
     const cur = data.current_weather;
     weatherInfo.innerHTML = `${cur.temperature}°C <span style="font-size: 0.8rem; opacity: 0.6;">${cur.windspeed} km/h</span>`;
-  } catch (e) {
-    weatherInfo.innerText = "--°C";
-  }
+  } catch (e) { weatherInfo.innerText = "--°C"; }
 }
 
-// Layer Switcher
-let activeLayerKey = 'dark';
 document.getElementById('layer-btn')?.addEventListener('click', () => {
   const keys = Object.keys(baseMaps);
   const nextKey = keys[(keys.indexOf(activeLayerKey) + 1) % keys.length] as keyof typeof baseMaps;
@@ -180,24 +152,7 @@ document.getElementById('layer-btn')?.addEventListener('click', () => {
   baseMaps[nextKey].addTo(map);
   activeLayerKey = nextKey;
 });
+let activeLayerKey = 'dark';
 
 document.getElementById('locate-btn')?.addEventListener('click', () => map.locate({ setView: true, maxZoom: 15 }));
-map.on('locationfound', (e) => {
-  L.circleMarker(e.latlng, { radius: 8, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }).addTo(map);
-  map.fire('click', { latlng: e.latlng } as any);
-});
-
-// Search
-(document.getElementById('search-input') as HTMLInputElement)?.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${(e.target as HTMLInputElement).value}, Spain`)
-      .then(r => r.json())
-      .then(res => {
-        if (res.length > 0) {
-          const loc = L.latLng(parseFloat(res[0].lat), parseFloat(res[0].lon));
-          map.setView(loc, 14);
-          map.fire('click', { latlng: loc } as any);
-        }
-      });
-  }
-});
+map.on('locationfound', (e) => map.fire('click', { latlng: e.latlng } as any));

@@ -144,11 +144,83 @@ body {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   animation: slideIn 0.3s ease-out forwards;
+}
+
+.restriction-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.restriction-item.expanded {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.item-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.item-details {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 16px;
+  transition: all 0.3s ease-out;
+  opacity: 0;
+}
+
+.restriction-item.expanded .item-details {
+  max-height: 300px;
+  padding-bottom: 16px;
+  opacity: 1;
+}
+
+.restriction-item.expanded .chevron {
+  transform: rotate(180deg);
+}
+
+.chevron {
+  transition: transform 0.3s;
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+.cat-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.action-btn-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  color: #000;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: transform 0.2s;
+}
+
+.action-btn-link:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
 }
 
 @keyframes slideIn {
