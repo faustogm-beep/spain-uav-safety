@@ -351,3 +351,5 @@ body {
   .status-floating { top: 80px; width: calc(100% - 40px); }
   .weather-widget { display: none; } /* Hide on small mobile to clear map */
 }
+
+.detail-body { padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); } .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; } .meta-grid span { opacity: 0.5; margin-right: 4px; }

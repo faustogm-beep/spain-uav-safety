@@ -45,18 +45,26 @@ baseMaps.dark.addTo(map);
 Object.values(LAYER_CONFIGS).forEach((config) => {
   Esri.featureLayer({
     url: `${config.service}/${config.id}`,
-    // Only display features starting below MAX_ALTITUDE
     where: "Lower < 120 OR Lower IS NULL", 
     style: (f) => {
-      // Final safety check on type
+      const name = (getFeatureProperty(f.properties, ['name', 'nombre']) || '').toUpperCase();
       const type = (f?.properties?.Type || '').toUpperCase();
       const isHidden = type.includes('TMA') || type.includes('UIR') || type.includes('FIR');
       
+      let color = config.color;
+      let weight = 2;
+      let dashArray = '';
+
+      if (name.includes('HOSPITAL') || type.includes('HOSPITAL')) color = '#3b82f6';
+      if (type.includes('HELI')) color = '#8b5cf6';
+      if (config.category === 'urbano') dashArray = '5, 5';
+      if (config.category === 'foto') { dashArray = '10, 10'; color = '#ea580c'; }
+
       return {
-        color: config.color,
-        weight: isHidden ? 0 : 2,
-        fillOpacity: isHidden ? 0 : (config.category === 'natural' ? 0.05 : 0.03),
-        dashArray: config.category === 'foto' ? '10, 10' : (config.category === 'urbano' ? '5, 5' : '')
+        color: color,
+        weight: isHidden ? 0 : weight,
+        fillOpacity: isHidden ? 0 : (config.category === 'natural' ? 0.05 : 0.02),
+        dashArray: dashArray
       };
     }
   }).addTo(map);
@@ -94,33 +102,52 @@ map.on('click', async (e: L.LeafletMouseEvent) => {
 
 function renderApp(features: any[], latlng: L.LatLng) {
   const container = document.getElementById('restriction-list')!;
+  
+  // Use event delegation for clicking items
+  container.onclick = (ev) => {
+    const item = (ev.target as HTMLElement).closest('.restriction-item');
+    if (item) item.classList.toggle('expanded');
+  };
 
   if (features.length === 0) {
     container.innerHTML = '<div class="empty-state">Sin restricciones directas. Mantén VLOS y precaución.</div>';
     updateStatus('ok', 'Cielo Despejado', 'Sin restricciones detectadas.');
   } else {
-    container.innerHTML = features.map(f => {
+    container.innerHTML = features.map((f, index) => {
       const config = f._config;
-      const name = getFeatureProperty(f.properties, ['name', 'nombre', 'label', 'identifier']) || config.name;
+      const props = f.properties;
+      const type = (props.Type || '').toUpperCase();
+      const name = getFeatureProperty(props, ['name', 'nombre', 'label', 'identifier']) || config.name;
       
+      // Dynamic sub-branding based on physical types
+      let subColor = config.color;
+      let icon = config.icon;
+      if (name.includes('HOSPITAL') || type.includes('HOSPITAL')) { subColor = '#3b82f6'; icon = 'M19 14l-7 7-7-7m14-4l-7 7-7-7'; }
+
       return `
-        <div class="restriction-item" style="border-left: 4px solid ${config.color}" onclick="this.classList.toggle('expanded')">
+        <div class="restriction-item" data-index="${index}" style="border-left: 4px solid ${subColor}">
           <div class="item-header">
-            <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${config.color}" stroke-width="2">
-              <path d="${config.icon}"></path>
+            <svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="${subColor}" stroke-width="2">
+              <path d="${icon}"></path>
             </svg>
             <div class="res-info">
               <h3>${name}</h3>
-              <span class="cat-tag" style="background: ${config.color}22; color: ${config.color}">${config.category.toUpperCase()}</span>
+              <span class="cat-tag" style="background: ${subColor}22; color: ${subColor}">${type || config.category.toUpperCase()}</span>
             </div>
             <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"></path></svg>
           </div>
           <div class="item-details">
-            <p>${getFeatureProperty(f.properties, ['description', 'desc_zg', 'reasons', 'message']) || 'Sin descripción adicional disponible.'}</p>
-            <a href="${config.action.url}" target="_blank" class="action-btn-link" style="background: ${config.color}">
-              ${config.action.label}
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path></svg>
-            </a>
+            <div class="detail-body">
+              <p>${getFeatureProperty(props, ['description', 'desc_zg', 'reasons', 'message']) || 'Zona restringida por seguridad aérea u operativa.'}</p>
+              <div class="meta-grid">
+                <div><span>Base:</span> ${props.Lower || 0}m</div>
+                <div><span>Techo:</span> ${props.Upper || 'UNL'}</div>
+              </div>
+              <a href="${config.action.url}" target="_blank" class="action-btn-link" style="background: ${subColor}">
+                ${config.action.label}
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path></svg>
+              </a>
+            </div>
           </div>
         </div>
       `;
