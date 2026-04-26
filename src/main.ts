@@ -2,7 +2,9 @@ import './style.css';
 import L from 'leaflet';
 import * as Esri from 'esri-leaflet';
 
-// --- Configuration & Services ---
+// --- Global State & Configuration ---
+const MAX_ALTITUDE = 120; // Standard UAS ceiling in Spain (meters AGL)
+
 const SERVICES = {
   UAS: 'https://servais.enaire.es/insignia/rest/services/NSF_SRV/SRV_UAS_ZG_V1/FeatureServer',
   NATURAL: 'https://servais.enaire.es/insignia/rest/services/ENP/ENP_APP_Local_V4/MapServer',
@@ -21,16 +23,12 @@ interface RestrictionConfig {
 
 const LAYER_CONFIGS: Record<string, RestrictionConfig> = {
   // UAS Service
-  'uas_0': { service: SERVICES.UAS, id: '0', category: 'infra', name: 'Infraestructura Crítica', color: '#a855f7', icon: 'M19 16v3M13 16v3M7 16v3M5 8h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z', action: { label: 'Más info Sede Electrónica', url: 'https://sede.interior.gob.es/' } },
-  'uas_2': { service: SERVICES.UAS, id: '2', category: 'aero', name: 'Control Aeronáutico', color: '#ef4444', icon: 'M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-1.1.1-1.5.5l-.3.3c-.4.4-.5 1-.1 1.4L10 12l-4 4H4l-2 2v2l2-2h2l4-4 3.6 7.1c.4.4 1 .3 1.4-.1l.3-.3c.4-.4.6-1 .5-1.5z', action: { label: 'Coordinar con ENAIRE', url: 'https://planea.enaire.es/' } },
-  'uas_3': { service: SERVICES.UAS, id: '3', category: 'urbano', name: 'Zona Urbana', color: '#facc15', icon: 'M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7', action: { label: 'Comunicación Ministerio', url: 'https://sede.interior.gob.es/portal/sede/tramites?codAgrupacion=Drones' } },
-  
-  // Natural Service
-  'nat_1': { service: SERVICES.NATURAL, id: '1', category: 'natural', name: 'Zona ZEPA / Protegida', color: '#10b981', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Ver normativa ambiental', url: 'https://www.miteco.gob.es/' } },
-  
-  // Extra Aero Service
-  'extra_3': { service: SERVICES.AERO_EXTRA, id: '3', category: 'foto', name: 'Restricción Fotográfica', color: '#f97316', icon: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', action: { label: 'Permiso RVF', url: 'https://www.defensa.gob.es/' } },
-  'extra_6': { service: SERVICES.AERO_EXTRA, id: '6', category: 'seguridad', name: 'Zona de Seguridad', color: '#3b82f6', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Consultar helipuerto/AD', url: 'https://planea.enaire.es/' } }
+  'uas_0': { service: SERVICES.UAS, id: '0', category: 'infra', name: 'Infraestructura Crítica', color: '#9333ea', icon: 'M19 16v3M13 16v3M7 16v3M5 8h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z', action: { label: 'Más info Sede Electrónica', url: 'https://sede.interior.gob.es/' } },
+  'uas_2': { service: SERVICES.UAS, id: '2', category: 'aero', name: 'Control Aeronáutico', color: '#dc2626', icon: 'M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-1.1.1-1.5.5l-.3.3c-.4.4-.5 1-.1 1.4L10 12l-4 4H4l-2 2v2l2-2h2l4-4 3.6 7.1c.4.4 1 .3 1.4-.1l.3-.3c.4-.4.6-1 .5-1.5z', action: { label: 'Coordinar con ENAIRE', url: 'https://planea.enaire.es/' } },
+  'uas_3': { service: SERVICES.UAS, id: '3', category: 'urbano', name: 'Zona Urbana', color: '#eab308', icon: 'M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7', action: { label: 'Comunicación Ministerio', url: 'https://sede.interior.gob.es/portal/sede/tramites?codAgrupacion=Drones' } },
+  'nat_1': { service: SERVICES.NATURAL, id: '1', category: 'natural', name: 'Zona ZEPA / Protegida', color: '#16a34a', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Ver normativa ambiental', url: 'https://www.miteco.gob.es/' } },
+  'extra_3': { service: SERVICES.AERO_EXTRA, id: '3', category: 'foto', name: 'Restricción Fotográfica', color: '#ea580c', icon: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', action: { label: 'Permiso RVF', url: 'https://www.defensa.gob.es/' } },
+  'extra_6': { service: SERVICES.AERO_EXTRA, id: '6', category: 'seguridad', name: 'Zona de Seguridad', color: '#2563eb', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', action: { label: 'Consultar helipuerto/AD', url: 'https://planea.enaire.es/' } }
 };
 
 // --- Initialization ---
@@ -43,15 +41,24 @@ const baseMaps = {
 baseMaps.dark.addTo(map);
 
 // Add visual layers with smart styling
+// Add visual layers with smart styling and altitude filtering
 Object.values(LAYER_CONFIGS).forEach((config) => {
   Esri.featureLayer({
     url: `${config.service}/${config.id}`,
-    style: () => ({
-      color: config.color,
-      weight: 2,
-      fillOpacity: config.category === 'natural' ? 0.05 : 0.03, // Very low to prevent blobs
-      dashArray: config.category === 'foto' ? '10, 10' : (config.category === 'urbano' ? '5, 5' : '')
-    })
+    // Only display features starting below MAX_ALTITUDE
+    where: "Lower < 120 OR Lower IS NULL", 
+    style: (f) => {
+      // Final safety check on type
+      const type = (f?.properties?.Type || '').toUpperCase();
+      const isHidden = type.includes('TMA') || type.includes('UIR') || type.includes('FIR');
+      
+      return {
+        color: config.color,
+        weight: isHidden ? 0 : 2,
+        fillOpacity: isHidden ? 0 : (config.category === 'natural' ? 0.05 : 0.03),
+        dashArray: config.category === 'foto' ? '10, 10' : (config.category === 'urbano' ? '5, 5' : '')
+      };
+    }
   }).addTo(map);
 });
 
@@ -67,7 +74,14 @@ map.on('click', async (e: L.LeafletMouseEvent) => {
         .contains(e.latlng)
         .run((error, featureCollection) => {
           if (!error && featureCollection?.features.length > 0) {
-            featureCollection.features.forEach((f: any) => results.push({ ...f, _config: config }));
+            featureCollection.features.forEach((f: any) => {
+              const lower = f.properties.Lower || 0;
+              const type = (f.properties.Type || '').toUpperCase();
+              // Filter out high-altitude TMAs/FIRs from the list too
+              if (lower < MAX_ALTITUDE && !type.includes('TMA') && !type.includes('FIR')) {
+                results.push({ ...f, _config: config });
+              }
+            });
           }
           resolve(true);
         });
